@@ -57,11 +57,6 @@ function SecretAdmin() {
   const handlePasswordSubmit = (e) => {
     e.preventDefault()
 
-    if (!ADMIN_PASSWORD || password.trim() === '') {
-      setPasswordError('Contraseña incorrecta')
-      return
-    }
-
     if (password === ADMIN_PASSWORD) {
       setDesbloqueado(true)
       setPassword('')
