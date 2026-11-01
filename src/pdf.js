@@ -83,7 +83,13 @@ const agregarFilaDni = async (
   escritor,
   frenteUrl,
   traseraUrl,
-  { maxHeight = 90, escala = 1, escalaEtiqueta = escala, xOffset = MARGIN } = {}
+  {
+    maxHeight = 90,
+    escala = 1,
+    escalaEtiqueta = escala,
+    xOffset = MARGIN,
+    altoDniBase = 52
+  } = {}
 ) => {
   const columnas = [
     { etiqueta: 'Parte delantera DNI/NIE', src: frenteUrl },
@@ -109,7 +115,7 @@ const agregarFilaDni = async (
 
   // Mismo tamaño exacto para todas las imágenes del DNI/NIE.
   const anchoObjetivo = anchoColumna
-  const altoObjetivo = Math.min(52 * escala, altoImagenMaximo)
+  const altoObjetivo = Math.min(altoDniBase * escala, altoImagenMaximo)
 
   const imagenes = cargadas.map(({ etiqueta, src }) => ({
     etiqueta,
@@ -213,7 +219,7 @@ export const generarPdfAutorizacion = async ({ documentoImagenes, frenteUrl, tra
     4 * Math.max(imagenes.length - 1, 0) +
     8 +
     (numLineas * 5 + 12) * relacionTexto +
-    (hayDni ? 6 + 52 : 0)
+    (hayDni ? 6 + 104 : 0)
 
   const altoDisponible = BOTTOM - MARGIN
   const escala = Math.min(1, altoDisponible / altoBloqueBase) * 0.98
@@ -249,7 +255,8 @@ export const generarPdfAutorizacion = async ({ documentoImagenes, frenteUrl, tra
     maxHeight: BOTTOM - escritor.y,
     escala,
     escalaEtiqueta: escalaTexto,
-    xOffset
+    xOffset,
+    altoDniBase: 104
   })
 
   return doc
