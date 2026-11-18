@@ -6,6 +6,18 @@ const MARGIN = 20
 const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2
 const BOTTOM = PAGE_HEIGHT - MARGIN
 
+// Texto compartido por la baja (App.jsx) y la autorización (secretAdmin).
+const TEXTO_SIZE = 12
+const TEXTO_INTERLINEADO = 5.5
+
+// El DNI de la baja mantiene su tamaño en el PDF final; el que se adjunta en
+// secretAdmin es más alto y gana espacio reduciendo márgenes y separaciones.
+const DNI_ALTO_BAJA = 52
+const DNI_ALTO_ADJUNTO = 104
+const DNI_ETIQUETA_ALTO = 6
+const DNI_ETIQUETA_ALTO_ADJUNTO = 4
+const MARGEN_AUTORIZACION = 10
+
 const cargarImagen = (src) =>
   new Promise((resolve, reject) => {
     const img = new Image()
@@ -88,7 +100,8 @@ const agregarFilaDni = async (
     escala = 1,
     escalaEtiqueta = escala,
     xOffset = MARGIN,
-    altoDniBase = 52
+    altoDniBase = DNI_ALTO_BAJA,
+    altoEtiquetaBase = DNI_ETIQUETA_ALTO
   } = {}
 ) => {
   const columnas = [
@@ -103,7 +116,7 @@ const agregarFilaDni = async (
   const separacion = 6 * escala
   const anchoTotal = CONTENT_WIDTH * escala
   const anchoColumna = (anchoTotal - separacion) / 2
-  const altoEtiqueta = 6 * escala
+  const altoEtiqueta = altoEtiquetaBase * escala
   const altoImagenMaximo = Math.max(12 * escala, maxHeight - altoEtiqueta)
 
   const cargadas = await Promise.all(
@@ -154,7 +167,7 @@ export const generarPdfBaja = async ({ nombre, dniNie, frenteUrl, traseraUrl }) 
 
   doc.setProperties({ title: 'Baja SLT' })
 
-  const compacto = { size: 10, interlineado: 5 }
+  const compacto = { size: TEXTO_SIZE, interlineado: TEXTO_INTERLINEADO }
 
   escritor.texto('Señores', { ...compacto, salto: 2 })
   escritor.texto('Sindicato Libre de Transportes (SLT)', { ...compacto, salto: 2 })
@@ -184,7 +197,8 @@ export const generarPdfBaja = async ({ nombre, dniNie, frenteUrl, traseraUrl }) 
   escritor.texto(dniNie, { ...compacto, alineacion: 'center', salto: 10 })
 
   await agregarFilaDni(escritor, frenteUrl, traseraUrl, {
-    maxHeight: BOTTOM - escritor.y
+    maxHeight: BOTTOM - escritor.y,
+    altoDniBase: DNI_ALTO_BAJA
   })
 
   return doc
@@ -200,39 +214,45 @@ export const generarPdfAutorizacion = async ({ documentoImagenes, frenteUrl, tra
   doc.setProperties({ title: 'Autorización baja SLT' })
 
   doc.setFont('helvetica', 'normal')
-  doc.setFontSize(10)
+  doc.setFontSize(TEXTO_SIZE)
   const lineasTexto = doc.splitTextToSize(TEXTO_AUTORIZACION, CONTENT_WIDTH)
-  const numLineas = lineasTexto.length
 
   const imagenes = await Promise.all(documentoImagenes.map(cargarImagen))
   const hayDni = Boolean(frenteUrl || traseraUrl)
 
-  // Todo el bloque (documento + texto + DNI) se escala con el mismo factor
-  // para que textos e imágenes mantengan proporciones y tamaños coherentes.
+  const separacionBloques = 4
+  const saltoTexto = 6
+
+  // El documento de App.jsx se inserta a su ancho A4 original con la misma
+  // escala que el texto, para que su DNI conserve el tamaño del PDF final.
+  // El DNI adjunto en secretAdmin va más alto: el espacio se gana recortando
+  // márgenes y separaciones, sin reducir la escala del resto.
   const sumaRatios = imagenes.reduce(
     (total, img) => total + img.naturalHeight / img.naturalWidth,
     0
   )
-  const relacionTexto = CONTENT_WIDTH / PAGE_WIDTH
   const altoBloqueBase =
-    CONTENT_WIDTH * sumaRatios +
+    PAGE_WIDTH * sumaRatios +
     4 * Math.max(imagenes.length - 1, 0) +
-    8 +
-    (numLineas * 5 + 12) * relacionTexto +
-    (hayDni ? 6 + 104 : 0)
+    (imagenes.length > 0 ? separacionBloques : 0) +
+    lineasTexto.length * TEXTO_INTERLINEADO +
+    saltoTexto +
+    (hayDni ? DNI_ETIQUETA_ALTO_ADJUNTO + DNI_ALTO_ADJUNTO : 0)
 
-  const altoDisponible = BOTTOM - MARGIN
-  const escala = Math.min(1, altoDisponible / altoBloqueBase) * 0.98
-  const altoBloque = altoBloqueBase * escala
-  const anchoBloque = CONTENT_WIDTH * escala
-  const xOffset = MARGIN + (CONTENT_WIDTH - anchoBloque) / 2
-  const escalaTexto = anchoBloque / PAGE_WIDTH
+  const altoDisponible = PAGE_HEIGHT - MARGEN_AUTORIZACION * 2
+  const escala = Math.min(1, altoDisponible / altoBloqueBase)
 
-  escritor.y = MARGIN + Math.max(0, (altoDisponible - altoBloque) / 2)
+  const anchoDocumento = PAGE_WIDTH * escala
+  const xDocumento = (PAGE_WIDTH - anchoDocumento) / 2
+  const xContenido = xDocumento + MARGIN * escala
+  const anchoContenido = CONTENT_WIDTH * escala
+
+  escritor.y =
+    MARGEN_AUTORIZACION + Math.max(0, (altoDisponible - altoBloqueBase * escala) / 2)
 
   for (const [indice, img] of imagenes.entries()) {
-    const alto = anchoBloque * (img.naturalHeight / img.naturalWidth)
-    doc.addImage(img.src, 'JPEG', xOffset, escritor.y, anchoBloque, alto)
+    const alto = anchoDocumento * (img.naturalHeight / img.naturalWidth)
+    doc.addImage(img.src, 'JPEG', xDocumento, escritor.y, anchoDocumento, alto)
     escritor.y += alto
     if (indice < imagenes.length - 1) {
       escritor.y += 4 * escala
@@ -240,23 +260,24 @@ export const generarPdfAutorizacion = async ({ documentoImagenes, frenteUrl, tra
   }
 
   if (imagenes.length > 0) {
-    escritor.y += 8 * escala
+    escritor.y += separacionBloques * escala
   }
 
   escritor.texto(TEXTO_AUTORIZACION, {
-    size: 10 * escalaTexto,
-    interlineado: 5 * escalaTexto,
-    salto: 12 * escalaTexto,
-    ancho: anchoBloque,
-    x: xOffset
+    size: TEXTO_SIZE * escala,
+    interlineado: TEXTO_INTERLINEADO * escala,
+    salto: saltoTexto * escala,
+    ancho: anchoContenido,
+    x: xContenido
   })
 
   await agregarFilaDni(escritor, frenteUrl, traseraUrl, {
-    maxHeight: BOTTOM - escritor.y,
+    maxHeight: PAGE_HEIGHT - MARGEN_AUTORIZACION - escritor.y,
     escala,
-    escalaEtiqueta: escalaTexto,
-    xOffset,
-    altoDniBase: 104
+    escalaEtiqueta: escala,
+    xOffset: xContenido,
+    altoDniBase: DNI_ALTO_ADJUNTO,
+    altoEtiquetaBase: DNI_ETIQUETA_ALTO_ADJUNTO
   })
 
   return doc
