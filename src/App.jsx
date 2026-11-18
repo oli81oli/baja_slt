@@ -113,7 +113,7 @@ function BajaForm() {
             className="input"
             placeholder="Nombre y apellidos"
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setNombre(e.target.value.toUpperCase())}
           />
         </div>
 
